@@ -9,7 +9,7 @@ package cz.wicketstuff.tspl2;
  * @author strma17
  *
  */
-public class Block {
+public class Block implements IPrintableString {
 
     private final int x;
     private final int y;
@@ -21,10 +21,10 @@ public class Block {
     private final int multY;
     private final int space;
     private final int alignment;
-    private final String text;
+    private final IEvaluable text;
     
     public Block(int x, int y, int width, int height, String font, int rotation, int multX, int multY, int space,
-            int alignment, String text) {
+            int alignment, IEvaluable text) {
         super();
         this.x = x;
         this.y = y;
@@ -79,11 +79,13 @@ public class Block {
         return alignment;
     }
     
-    public String getText() {
+    public IEvaluable getText() {
         return text;
     }
 
 
+    
+    @Override
     public String toPrintString() {
         StringBuilder sb = new StringBuilder("BLOCK ");
         sb.append(x);
@@ -109,7 +111,7 @@ public class Block {
         sb.append(alignment);
         sb.append(",");
         sb.append("\"");
-        sb.append(text);
+        sb.append(text.toPrintString());
         sb.append("\"");
         return sb.toString();
     }
