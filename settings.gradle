@@ -1,0 +1,2 @@
+include 'jtspl2-core'
+include 'integrationTest'

@@ -1,0 +1,40 @@
+language: java
+sudo: false
+install: true
+addons:
+  sonarcloud:
+    organization: "jgreen"
+    github_token:
+      secure: $GITHUB_TOKEN_PASSWORD
+    branches:
+      - .*
+  chrome: stable
+install:
+  - wget -N http://chromedriver.storage.googleapis.com/2.32/chromedriver_linux64.zip -P ~/
+  - unzip ~/chromedriver_linux64.zip -d ~/
+  - rm ~/chromedriver_linux64.zip
+  - sudo mv -f ~/chromedriver /usr/local/share/
+  - sudo chmod +x /usr/local/share/chromedriver
+  - sudo ln -s /usr/local/share/chromedriver /usr/local/bin/chromedriver
+jdk:
+  - oraclejdk8
+script:
+  - if [ "$TRAVIS_BRANCH" == "master" ]; then
+      ./gradlew clean build sonarqube artifactoryPublish -i;
+      test "${TRAVIS_PULL_REQUEST}" == "false" && test "${TRAVIS_TAG}" != "" && ./gradlew bintrayUpload;
+      git push https://$GITHUB_TOKEN_USER:$GITHUB_TOKEN_PASSWORD@github.com/martinstrejc/jgreen.git master:intTest;
+    fi
+  - if [ "$TRAVIS_BRANCH" == "intTest" ]; then
+      whereis google-chrome-stable;
+      whereis chromedriver;
+      ./gradlew integrationTest stopPetClinicServerAfter -i;
+    fi
+before_cache:
+  - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
+  - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+cache:
+  directories:
+  - '$HOME/.m2/repository'
+  - '$HOME/.sonar/cache'
+  - '$HOME/.gradle'
+  - '.gradle'

@@ -1,0 +1,100 @@
+import org.ajoberstar.grgit.Grgit
+import org.apache.tools.ant.taskdefs.condition.Os
+
+apply plugin: 'java-library'
+apply plugin: "org.ajoberstar.grgit"
+apply plugin: "com.github.psxpaul.execfork"
+
+dependencies {
+    compile project(':jtspl2-core')
+    compile 'io.cucumber:cucumber-core:' + cucumberVersion
+    compile 'org.junit.jupiter:junit-jupiter-api:' + jUnitVersion
+    compile 'org.junit.jupiter:junit-jupiter-engine:' + jUnitVersion
+    compile 'org.slf4j:slf4j-log4j12:' + slf4Version
+    compile 'log4j:log4j:1.2.17'
+    compile 'javax.inject:javax.inject:1'
+}
+
+sonarqube {
+    skipProject = true
+}
+
+build << {
+    println "Running Integration tests"
+    sleep(10000)
+    println "Integration tests done"
+}
+
+task integrationTest(dependsOn: ['startPetClinic', 'build']) << {
+    System.setProperty 'spring.profiles.active', 'travis-it'
+}
+
+task clonePetClinic << {
+    println "Cloning Pet Clinic repository"
+    def grgit = Grgit.clone(dir: "$buildDir/spring-petclinic", uri: "https://github.com/spring-projects/spring-petclinic.git")
+    grgit.close()
+
+    def app_properties = new File("$buildDir/spring-petclinic/application.properties")
+    app_properties.createNewFile()
+    app_properties.text = "endpoints.shutdown.enabled=true"
+}
+
+clonePetClinic.onlyIf {
+    def petclinic_folder = new File("$buildDir/spring-petclinic")
+    return !petclinic_folder.exists()
+}
+
+task startPetClinic(type: com.github.psxpaul.task.ExecFork, dependsOn: 'clonePetClinic') {
+    if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        commandLine = 'cmd'
+        args = ['/C', 'mvnw spring-boot:run']
+    } else {
+        commandLine = './mvnw'
+        args = ['spring-boot:run']
+    }
+    workingDir = "$projectDir/build/spring-petclinic"
+    standardOutput = "$buildDir/daemon.log"
+    errorOutput = "$buildDir/daemon-error.log"
+    stopAfter = build
+    waitForPort = 8080
+}
+
+["stopPetClinicServerBefore", "stopPetClinicServerAfter"].each { name ->
+    task "$name" << {
+        try {
+            URL url = new URL("http://localhost:8080/manage/shutdown");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.connect();
+
+            InputStream is = connection.getInputStream();
+            BufferedReader rd = new BufferedReader(new InputStreamReader(is));
+            String line;
+            StringBuffer response = new StringBuffer();
+            while ((line = rd.readLine()) != null) {
+                response.append(line);
+                response.append('\r');
+            }
+            rd.close();
+            println "Response: " + response
+            sleep(3000)
+        } catch (ConnectException e) {
+
+        }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    if (!gradle.taskGraph.hasTask(":integrationTest:integrationTest")) {
+        gradle.taskGraph.allTasks.each {
+            def taskName = it.getName()
+            if (it.project == project && taskName == 'build') {
+                it.onlyIf { false }
+            }
+        }
+    }
+}
+
+stopPetClinicServerAfter.mustRunAfter build
+clean.dependsOn stopPetClinicServerBefore
+build.mustRunAfter startPetClinic

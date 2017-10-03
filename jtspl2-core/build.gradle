@@ -1,0 +1,169 @@
+apply plugin: 'java-library'
+apply plugin: 'maven-publish'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'org.junit.platform.gradle.plugin'
+apply plugin: 'jacoco'
+apply plugin: "com.jfrog.artifactory"
+
+jacoco {
+    toolVersion = '0.7.9'
+    applyTo junitPlatformTest
+}
+
+dependencies {
+    compile 'org.hamcrest:hamcrest-core:1.3'
+    compile 'commons-io:commons-io:2.5'
+    compile 'commons-lang:commons-lang:2.6'
+    compile 'javax.validation:validation-api:2.0.0.Final'
+    compile 'org.junit.jupiter:junit-jupiter-api:' + jUnitVersion
+    runtime 'org.junit.jupiter:junit-jupiter-engine:' + jUnitVersion
+    compile 'org.aspectj:aspectjtools:1.8.10'
+    compile 'org.slf4j:slf4j-api:' + slf4Version
+
+    compile 'io.cucumber:cucumber-core:' + cucumberVersion
+    compile 'io.cucumber:cucumber-java:' + cucumberVersion
+    compile 'io.cucumber:cucumber-junit:' + cucumberVersion
+    compile 'io.cucumber:cucumber-spring:' + cucumberVersion
+    compile 'junit:junit:4.12'
+
+    compile 'org.seleniumhq.selenium:selenium-api:' + seleniumVersion
+    compile 'org.seleniumhq.selenium:selenium-firefox-driver:' + seleniumVersion
+    compile 'org.seleniumhq.selenium:selenium-chrome-driver:' + seleniumVersion
+    compile 'org.seleniumhq.selenium:selenium-ie-driver:' + seleniumVersion
+    compile 'org.seleniumhq.selenium:selenium-remote-driver:' + seleniumVersion
+    compile 'org.seleniumhq.selenium:selenium-support:' + seleniumVersion
+
+    compile 'org.springframework:spring-beans:' + springVersion
+    compile 'org.springframework:spring-context:' + springVersion
+    compile 'org.springframework:spring-test:' + springVersion
+    compile 'org.springframework:spring-tx:' + springVersion
+
+    compile 'org.springframework.boot:spring-boot:1.5.7.RELEASE'
+    
+    compile 'org.hibernate:hibernate-validator:6.0.2.Final'
+
+    testCompile 'org.slf4j:slf4j-log4j12:' + slf4Version
+    testCompile 'log4j:log4j:1.2.17'
+    testCompile 'org.hamcrest:hamcrest-core:1.3'
+    testCompile 'org.mockito:mockito-core:2.10.0'
+    testCompile 'javax.inject:javax.inject:1'
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+publishing {
+    publications {
+        jgreenPublication(MavenPublication) {
+            from components.java
+            groupId 'cz.wicketstuff.jtpsl2'
+            artifactId 'jtpsl2-core'
+            version project.version
+
+            artifact sourcesJar
+            artifact javadocJar
+
+            pom.withXml {
+                asNode().with {
+                    appendNode('name', 'jTPSL2')
+                    appendNode('description', 'Java Green - BDD style functional testing tool based on Selenium, Cucumber and Spring')
+                    appendNode('url', 'http://jtpsl2.wicketstuff.cz/')
+                    appendNode('licenses').with {
+                        appendNode('license').with {
+                            appendNode('name', 'The Apache License, Version 2.0')
+                            appendNode('url', 'http://www.apache.org/licenses/LICENSE-2.0.txt')
+                        }
+                    }
+                    appendNode('developers').with {
+                        appendNode('developer').with {
+                            appendNode('name', 'Martin Strejc')
+                            appendNode('email', 'martin.strejc@diamon.cz')
+                            appendNode('organization', 'Diamon')
+                            appendNode('organizationUrl', 'http://jtpsl2.wicketstuff.cz/')
+                        }
+                    }
+                    appendNode('scm').with {
+                        appendNode('developerConnection', 'scm:git:git@github.com:martinstrejc/jTPSL2.git')
+                        appendNode('connection', 'scm:git:https://github.com/martinstrejc/jTPSL2.git')
+                        appendNode('url', 'https://github.com/martinstrejc/jTPSL2/')
+                    }
+                }
+            }
+        }
+    }
+}
+
+bintray {
+    user = System.env.BINTRAY_USER
+    key = System.env.BINTRAY_API_KEY
+    publications = ['jgreenPublication']
+    publish = false
+    override = false
+    pkg {
+        repo = 'jTPSL2'
+        name = 'jTPSL2'
+        userOrg = 'jTPSL2'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/martinstrejc/jTPSL2.git'
+        version {
+            name = project.version
+            desc = 'Java Green - BDD style functional testing tool based on Selenium, Cucumber and Spring'
+            released = new Date()
+            mavenCentralSync {
+                sync = true
+                user = System.env.MAVEN_USER_TOKEN
+                password = System.env.MAVEN_PASSWORD
+                close = '0'
+            }
+        }
+    }
+}
+
+artifactory {
+    contextUrl = "https://oss.jfrog.org/artifactory"   //The base Artifactory URL if not overridden by the publisher/resolver
+    publish {
+        repository {
+            repoKey = 'oss-snapshot-local'
+            username = System.env.BINTRAY_USER
+            password = System.env.BINTRAY_API_KEY
+            maven = true
+        }
+        defaults {
+            publications('jgreenPublication')
+            publishArtifacts = true
+            publishPom = true
+        }
+    }
+}
+
+task junit5CodeCoverageReport(type:JacocoReport){
+    executionData junitPlatformTest
+    sourceSets sourceSets.main
+    sourceDirectories = files(project.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(project.sourceSets.main.output)
+    reports {
+        xml.enabled = false
+        html.enabled = true
+    }
+}
+
+test.finalizedBy junit5CodeCoverageReport
+
+sonarqube {
+    properties {
+        property 'sonar.junit.reportPaths', 'build/test-results/junit-platform'
+        property 'sonar.jacoco.reportPaths', 'build/jacoco/junitPlatformTest.exec'
+    }
+}

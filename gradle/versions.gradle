@@ -1,0 +1,18 @@
+// Configuration file for gradle-versions-plugin
+// https://github.com/ben-manes/gradle-versions-plugin
+
+// Quick usage: gradlew dependencyUpdates -Drevision=release
+
+// Excludes non release versions from dependency version checks
+dependencyUpdates.resolutionStrategy = {
+    componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+            boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'preview'].any { qualifier ->
+                selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+            }
+            if (rejected) {
+                selection.reject('Release candidate')
+            }
+        }
+    }
+}
